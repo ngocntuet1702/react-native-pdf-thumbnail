@@ -5,6 +5,7 @@ A react native module for generating thumbnail for PDF files.
 A wrapper for:
 - PDFKit on iOS (requires iOS 11+)
 - PdfRenderer on Android (requires API level 21 - LOLLIPOP)
+- [PdfiumCore](https://github.com/barteksc/PdfiumAndroid) on Android (when file contains digital signatures)
 
 No other JavaScript or native dependencies.
 

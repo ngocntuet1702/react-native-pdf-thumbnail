@@ -18,8 +18,13 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.Random
 
+import com.shockwave.pdfium.PdfiumCore;
+import com.shockwave.pdfium.PdfDocument;
+
 class PdfThumbnailModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
+
+  val pdfiumCore = PdfiumCore(reactContext)
 
   override fun getName(): String {
     return NAME
@@ -28,7 +33,7 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
   @ReactMethod
   fun generate(filePath: String, page: Int, quality: Int, promise: Promise) {
     var parcelFileDescriptor: ParcelFileDescriptor? = null
-    var pdfRenderer: PdfRenderer? = null
+    var pdfDocument: PdfDocument? = null;
     try {
       parcelFileDescriptor = getParcelFileDescriptor(filePath)
       if (parcelFileDescriptor == null) {
@@ -36,26 +41,29 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
         return
       }
 
-      pdfRenderer = PdfRenderer(parcelFileDescriptor)
-      if (page < 0 || page >= pdfRenderer.pageCount) {
-        promise.reject("INVALID_PAGE", "Page number $page is invalid, file has ${pdfRenderer.pageCount} pages")
+      pdfDocument = pdfiumCore.newDocument(parcelFileDescriptor)
+      val pageCount = pdfiumCore.getPageCount(pdfDocument);
+
+      if (page < 0 || page >= pageCount) {
+        promise.reject("INVALID_PAGE", "Page number $page is invalid, file has $pageCount pages")
         return
       }
 
-      val result = renderPage(pdfRenderer, page, filePath, quality)
+      val result = renderPage(page, filePath, quality, pdfDocument)
       promise.resolve(result)
     } catch (ex: IOException) {
       promise.reject("INTERNAL_ERROR", ex)
     } finally {
-      pdfRenderer?.close()
       parcelFileDescriptor?.close()
+      // important!
+      pdfiumCore.closeDocument(pdfDocument);
     }
   }
 
   @ReactMethod
   fun generateAllPages(filePath: String, quality: Int, promise: Promise) {
     var parcelFileDescriptor: ParcelFileDescriptor? = null
-    var pdfRenderer: PdfRenderer? = null
+    var pdfDocument: PdfDocument? = null;
     try {
       parcelFileDescriptor = getParcelFileDescriptor(filePath)
       if (parcelFileDescriptor == null) {
@@ -63,17 +71,20 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
         return
       }
 
-      pdfRenderer = PdfRenderer(parcelFileDescriptor)
+      pdfDocument = pdfiumCore.newDocument(parcelFileDescriptor)
+      val pageCount = pdfiumCore.getPageCount(pdfDocument);
+
       val result = WritableNativeArray()
-      for (page in 0 until pdfRenderer.pageCount) {
-        result.pushMap(renderPage(pdfRenderer, page, filePath, quality))
+      for (page in 0 until pageCount) {
+        result.pushMap(renderPage(page, filePath, quality, pdfDocument))
       }
       promise.resolve(result)
     } catch (ex: IOException) {
       promise.reject("INTERNAL_ERROR", ex)
     } finally {
-      pdfRenderer?.close()
       parcelFileDescriptor?.close()
+      // important!
+      pdfiumCore.closeDocument(pdfDocument);
     }
   }
 
@@ -88,27 +99,24 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
     return null
   }
 
-  private fun renderPage(pdfRenderer: PdfRenderer, page: Int, filePath: String, quality: Int): WritableNativeMap {
-    val currentPage = pdfRenderer.openPage(page)
-    val width = currentPage.width
-    val height = currentPage.height
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    bitmap.eraseColor(Color.WHITE)
-    currentPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-    currentPage.close()
+  private fun renderPage(page: Int, filePath: String, quality: Int, pdfDocument: PdfDocument): WritableNativeMap {
+    pdfiumCore.openPage(pdfDocument, page);
+    val width = pdfiumCore.getPageWidthPoint(pdfDocument, page) * 2;
+    val height = pdfiumCore.getPageHeightPoint(pdfDocument, page) * 2;
 
-    // Some bitmaps have transparent background which results in a black thumbnail. Add a white background.
-    val bitmapWhiteBG = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config)
-    val canvas = Canvas(bitmapWhiteBG)
-    canvas.drawBitmap(bitmap, 0f, 0f, null)
-    bitmap.recycle()
+    /**
+     * ARGB_8888 - best quality, high memory usage, higher possibility of OutOfMemoryError
+     * RGB_565 - little worse quality, twice less memory usage
+     */
+    val bitmapWhiteBG = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+    pdfiumCore.renderPageBitmap(pdfDocument, bitmapWhiteBG, page, 0, 0, width, height, true)
 
-    val outputFile = File.createTempFile(getOutputFilePrefix(filePath, page), ".jpg", reactApplicationContext.cacheDir)
+    val outputFile = File.createTempFile(getOutputFilePrefix(filePath, page), ".png", reactApplicationContext.cacheDir)
     if (outputFile.exists()) {
       outputFile.delete()
     }
     val out = FileOutputStream(outputFile)
-    bitmapWhiteBG.compress(Bitmap.CompressFormat.JPEG, quality, out)
+    bitmapWhiteBG.compress(Bitmap.CompressFormat.JPEG, 100, out)
     bitmapWhiteBG.recycle()
     out.flush()
     out.close()
