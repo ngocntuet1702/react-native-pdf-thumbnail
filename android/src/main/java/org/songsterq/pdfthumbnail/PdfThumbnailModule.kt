@@ -50,13 +50,13 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
       }
 
       val result = renderPage(page, filePath, quality, pdfDocument)
+      // important!
+      pdfiumCore.closeDocument(pdfDocument);
       promise.resolve(result)
     } catch (ex: IOException) {
       promise.reject("INTERNAL_ERROR", ex)
     } finally {
       parcelFileDescriptor?.close()
-      // important!
-      pdfiumCore.closeDocument(pdfDocument);
     }
   }
 
@@ -78,13 +78,13 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
       for (page in 0 until pageCount) {
         result.pushMap(renderPage(page, filePath, quality, pdfDocument))
       }
+      // important!
+      pdfiumCore.closeDocument(pdfDocument);
       promise.resolve(result)
     } catch (ex: IOException) {
       promise.reject("INTERNAL_ERROR", ex)
     } finally {
       parcelFileDescriptor?.close()
-      // important!
-      pdfiumCore.closeDocument(pdfDocument);
     }
   }
 
