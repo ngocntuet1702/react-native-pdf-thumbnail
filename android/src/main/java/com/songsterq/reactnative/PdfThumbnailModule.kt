@@ -1,4 +1,4 @@
-package org.songsterq.pdfthumbnail
+package com.songsterq.reactnative
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
