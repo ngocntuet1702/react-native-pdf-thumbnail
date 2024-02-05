@@ -65,11 +65,11 @@ class PdfThumbnail: NSObject {
         }
 
         let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality);
-        let isErrorExists = res?["error"] != nil;
+        let isErrorExists = pageResult?["error"] != nil;
         
         if (pageResult != nil) {
             if (isErrorExists) {
-                reject("INTERNAL_ERROR", "Cannot write image data: \(String(describing: res?["error"]))", nil);
+                reject("INTERNAL_ERROR", "Cannot write image data: \(String(describing: pageResult?["error"]))", nil);
                 return;
             } else {
                 resolve(pageResult)
