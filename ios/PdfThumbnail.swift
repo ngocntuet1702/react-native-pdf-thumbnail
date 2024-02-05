@@ -41,7 +41,10 @@ class PdfThumbnail: NSObject {
                 "height": Int(pageRect.height),
             ]
         } catch {
-            return nil
+            return [
+                "error": error
+            ]
+            // return nil
         }
     }
 
@@ -61,10 +64,16 @@ class PdfThumbnail: NSObject {
             return
         }
 
-        if let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality) {
-            resolve(pageResult)
-        } else {
-            reject("INTERNAL_ERROR", "Cannot write image data", nil)
+        let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality);
+        let isErrorExists = res?["error"] != nil;
+        
+        if (pageResult != nil) {
+            if (isErrorExists) {
+                reject("INTERNAL_ERROR", "Cannot write image data: \(String(describing: res?["error"]))", nil);
+                return;
+            } else {
+                resolve(pageResult)
+            }
         }
     }
 
@@ -86,12 +95,26 @@ class PdfThumbnail: NSObject {
                 reject("INVALID_PAGE", "Page number \(page) is invalid, file has \(pdfDocument.pageCount) pages", nil)
                 return
             }
-            if let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality) {
-                result.append(pageResult)
-            } else {
-                reject("INTERNAL_ERROR", "Cannot write image data", nil)
-                return
+
+            let res = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality)
+            
+            if ((res) != nil) {
+                let isErrorExists = res?["error"] != nil;
+                
+                if (isErrorExists) {
+                    reject("INTERNAL_ERROR", "Cannot write image data: \(String(describing: res?["error"]))", nil);
+                    return;
+                } else {
+                    result.append(res!);
+                }
             }
+
+            // if let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality) {
+            //     result.append(pageResult)
+            // } else {
+            //     reject("INTERNAL_ERROR", "Cannot write image data", nil)
+            //     return
+            // }
         }
         resolve(result)
     }
