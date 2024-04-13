@@ -42,7 +42,7 @@ class PdfThumbnail: NSObject {
             height = Int(pageRect.width);
         } else {
             width = Int(pageRect.width);
-            heihgt = Int(pageRect.height);
+            height = Int(pageRect.height);
         }
 
         do {
