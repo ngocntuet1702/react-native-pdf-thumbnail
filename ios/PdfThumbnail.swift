@@ -33,12 +33,24 @@ class PdfThumbnail: NSObject {
         guard let data = image.jpegData(compressionQuality: CGFloat(quality) / 100) else {
             return nil
         }
+
+        let width: Int;
+        let height: Int;
+
+        if (pdfPage.rotation % 180 == 90) {
+            width = Int(pageRect.height);
+            height = Int(pageRect.width);
+        } else {
+            width = Int(pageRect.width);
+            heihgt = Int(pageRect.height);
+        }
+
         do {
             try data.write(to: outputFile)
             return [
                 "uri": outputFile.absoluteString,
-                "width": Int(pageRect.width),
-                "height": Int(pageRect.height),
+                "width": width,
+                "height": height,
             ]
         } catch {
             return [
