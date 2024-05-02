@@ -25,11 +25,77 @@ class PdfThumbnail: NSObject {
         return "\(prefix)-thumbnail-\(page)-\(random).jpg"
     }
 
+    func getImagesSignFolder() -> URL {
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0];
+        let folderName = "imagesSign";
+        let folderURL = documentsDirectory.appendingPathComponent(folderName)
+        
+        return folderURL;
+    }
+
+    func deleteGeneratedFolder() -> Bool {
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0];
+        let folderName = "imagesSign";
+        let folderURL = documentsDirectory.appendingPathComponent(folderName)
+        
+        // Remove folder if it already exists
+        if FileManager.default.fileExists(atPath: folderURL.path) {
+            do {
+                try FileManager.default.removeItem(at: folderURL)
+                return true;
+            } catch {
+                print("Error removing existing folder: \(error)")
+                return false;
+            }
+        }
+        
+        return false;
+    }
+
+    @objc(getTotalPage:withResolver:withRejecter:)
+    func getTotalPage(filePath: String, resolve:RCTPromiseResolveBlock, reject:RCTPromiseRejectBlock) -> Void {
+        guard let fileUrl = URL(string: filePath) else {
+            reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
+            return
+        }
+        guard let pdfDocument = PDFDocument(url: fileUrl) else {
+            reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
+            return
+        }
+        
+        // Remove the folder if it already exists
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0];
+        let folderName = "imagesSign";
+        let folderURL = documentsDirectory.appendingPathComponent(folderName)
+    
+        //   if FileManager.default.fileExists(atPath: folderURL.path) {
+        //       do {
+        //           try FileManager.default.removeItem(at: folderURL)
+        //       } catch {
+        //           print("Error removing existing folder: \(error)")
+        //       }
+        //   }
+
+        // Create a custom folder if it doesn't exist
+        if !FileManager.default.fileExists(atPath: folderURL.path) {
+            do {
+                try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                print("Error creating custom folder: \(error)")
+                reject("ERROR_CREATING_FOLDER", "\(error)", nil)
+                return;
+            }
+        }
+        print("Page count: \(pdfDocument.pageCount)");
+
+        resolve(pdfDocument.pageCount)
+    }
+
     func generatePage(pdfPage: PDFPage, filePath: String, page: Int, quality: Int) -> Dictionary<String, Any>? {
         let pageRect = pdfPage.bounds(for: .mediaBox)
         let imageSize = CGSize(width: pageRect.width * 2, height: pageRect.height * 2)
         let image = pdfPage.thumbnail(of: imageSize, for: .mediaBox)
-        let outputFile = getCachesDirectory().appendingPathComponent(getOutputFilename(filePath: filePath, page: page))
+        let outputFile = getImagesSignFolder().appendingPathComponent(getOutputFilename(filePath: filePath, page: page))
         guard let data = image.jpegData(compressionQuality: CGFloat(quality) / 100) else {
             return nil
         }
