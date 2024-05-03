@@ -32,7 +32,29 @@ class PdfThumbnail: NSObject {
         return subFolderURL;
     }
 
-     @objc(deleteGeneratedFolder)
+     func createFolderBeforeGenerate() -> Void {
+        let folder = getImagesSignFolder();
+
+        // Remove folder if it already exists
+        if FileManager.default.fileExists(atPath: folder.path) {
+            do {
+                try FileManager.default.removeItem(at: folder)
+            } catch {
+                print("Error removing existing folder: \(error)")
+            }
+        }
+        
+        // Create a custom folder if it doesn't exist
+        if !FileManager.default.fileExists(atPath: folder.path) {
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                print("Error creating custom folder: \(error)")
+            }
+        }
+    }
+
+    @objc(deleteGeneratedFolder)
     func deleteGeneratedFolder() -> Bool {
         let folder = getImagesSignFolder();
         
@@ -60,83 +82,76 @@ class PdfThumbnail: NSObject {
             reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
             return
         }
-        
-        // Create a custom folder if it doesn't exist
-        let folder = getImagesSignFolder();
-        if !FileManager.default.fileExists(atPath: folder.path) {
-            do {
-                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                print("Error creating custom folder: \(error)")
-                reject("ERROR_CREATING_FOLDER", "\(error)", nil)
-                return;
-            }
-        }
-        print("Page count: \(pdfDocument.pageCount)");
+
+        createFolderBeforeGenerate();
 
         resolve(pdfDocument.pageCount)
     }
 
     func generatePage(pdfPage: PDFPage, filePath: String, page: Int, quality: Int) -> Dictionary<String, Any>? {
-        let pageRect = pdfPage.bounds(for: .mediaBox)
-        let imageSize = CGSize(width: pageRect.width * 2, height: pageRect.height * 2)
-        let image = pdfPage.thumbnail(of: imageSize, for: .mediaBox)
-        let outputFile = getImagesSignFolder().appendingPathComponent(getOutputFilename(filePath: filePath, page: page))
-        guard let data = image.jpegData(compressionQuality: CGFloat(quality) / 100) else {
-            return nil
-        }
+         autoreleasepool {
+            let pageRect = pdfPage.bounds(for: .mediaBox)
+            let imageSize = CGSize(width: pageRect.width * 2, height: pageRect.height * 2)
+            let image = pdfPage.thumbnail(of: imageSize, for: .mediaBox)
+            let outputFile = getImagesSignFolder().appendingPathComponent(getOutputFilename(filePath: filePath, page: page))
+            guard let data = image.jpegData(compressionQuality: CGFloat(quality) / 100) else {
+                return nil
+            }
 
-        let width: Int;
-        let height: Int;
+            let width: Int;
+            let height: Int;
 
-        if (pdfPage.rotation % 180 == 90) {
-            width = Int(pageRect.height);
-            height = Int(pageRect.width);
-        } else {
-            width = Int(pageRect.width);
-            height = Int(pageRect.height);
-        }
+            if (pdfPage.rotation % 180 == 90) {
+                width = Int(pageRect.height);
+                height = Int(pageRect.width);
+            } else {
+                width = Int(pageRect.width);
+                height = Int(pageRect.height);
+            }
 
-        do {
-            try data.write(to: outputFile)
-            return [
-                "uri": outputFile.absoluteString,
-                "width": width,
-                "height": height,
-            ]
-        } catch {
-            return [
-                "error": error
-            ]
-            // return nil
+            do {
+                try data.write(to: outputFile)
+                return [
+                    "uri": outputFile.absoluteString,
+                    "width": width,
+                    "height": height,
+                ]
+            } catch {
+                return [
+                    "error": error
+                ]
+                // return nil
+            }
         }
     }
 
     @available(iOS 11.0, *)
     @objc(generate:withPage:withQuality:withResolver:withRejecter:)
     func generate(filePath: String, page: Int, quality: Int, resolve:RCTPromiseResolveBlock, reject:RCTPromiseRejectBlock) -> Void {
-        guard let fileUrl = URL(string: filePath) else {
-            reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
-            return
-        }
-        guard let pdfDocument = PDFDocument(url: fileUrl) else {
-            reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
-            return
-        }
-        guard let pdfPage = pdfDocument.page(at: page) else {
-            reject("INVALID_PAGE", "Page number \(page) is invalid, file has \(pdfDocument.pageCount) pages", nil)
-            return
-        }
+        autoreleasepool {
+            guard let fileUrl = URL(string: filePath) else {
+                reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
+                return
+            }
+            guard let pdfDocument = PDFDocument(url: fileUrl) else {
+                reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
+                return
+            }
+            guard let pdfPage = pdfDocument.page(at: page) else {
+                reject("INVALID_PAGE", "Page number \(page) is invalid, file has \(pdfDocument.pageCount) pages", nil)
+                return
+            }
 
-        let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality);
-        let isErrorExists = pageResult?["error"] != nil;
-        
-        if (pageResult != nil) {
-            if (isErrorExists) {
-                reject("INTERNAL_ERROR", "Cannot write image data: \(String(describing: pageResult?["error"]))", nil);
-                return;
-            } else {
-                resolve(pageResult)
+            let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality);
+            let isErrorExists = pageResult?["error"] != nil;
+            
+            if (pageResult != nil) {
+                if (isErrorExists) {
+                    reject("INTERNAL_ERROR", "Cannot write image data: \(String(describing: pageResult?["error"]))", nil);
+                    return;
+                } else {
+                    resolve(pageResult)
+                }
             }
         }
     }
@@ -153,33 +168,40 @@ class PdfThumbnail: NSObject {
             return
         }
 
-        var result: [Dictionary<String, Any>] = []
-        for page in 0..<pdfDocument.pageCount {
-            guard let pdfPage = pdfDocument.page(at: page) else {
-                reject("INVALID_PAGE", "Page number \(page) is invalid, file has \(pdfDocument.pageCount) pages", nil)
-                return
-            }
-
-            let res = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality)
+        autoreleasepool {
             
-            if ((res) != nil) {
-                let isErrorExists = res?["error"] != nil;
-                
-                if (isErrorExists) {
-                    reject("INTERNAL_ERROR", "Cannot write image data: \(String(describing: res?["error"]))", nil);
-                    return;
-                } else {
-                    result.append(res!);
+            createFolderBeforeGenerate();
+            
+            var result: [Dictionary<String, Any>] = []
+            for page in 0..<pdfDocument.pageCount {
+                autoreleasepool {
+                    guard let pdfPage = pdfDocument.page(at: page) else {
+                        reject("INVALID_PAGE", "Page number \(page) is invalid, file has \(pdfDocument.pageCount) pages", nil)
+                        return
+                    }
+
+                    let res = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality)
+                    
+                    if ((res) != nil) {
+                        let isErrorExists = res?["error"] != nil;
+                        
+                        if (isErrorExists) {
+                            reject("INTERNAL_ERROR", "Cannot write image data: \(String(describing: res?["error"]))", nil);
+                            return;
+                        } else {
+                            result.append(res!);
+                        }
+                    }
+
+                    // if let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality) {
+                    //     result.append(pageResult)
+                    // } else {
+                    //     reject("INTERNAL_ERROR", "Cannot write image data", nil)
+                    //     return
+                    // }
                 }
             }
-
-            // if let pageResult = generatePage(pdfPage: pdfPage, filePath: filePath, page: page, quality: quality) {
-            //     result.append(pageResult)
-            // } else {
-            //     reject("INTERNAL_ERROR", "Cannot write image data", nil)
-            //     return
-            // }
+            resolve(result)
         }
-        resolve(result)
     }
 }

@@ -31,6 +31,20 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
     return NAME
   }
 
+  fun createFolderBeforeGenerate() {
+    val subFolder = File(reactApplicationContext.cacheDir, subFolderName)
+
+    // Remove folder if it already exists
+    if (subFolder.exists()) {
+      subFolder.deleteRecursively();
+    }
+
+    // Create a sub-folder before generate image.
+    if (!subFolder.exists()) {
+      subFolder.mkdirs()
+    }
+  }
+
   @ReactMethod
   fun deleteGeneratedFolder(): Boolean {
     val cacheDir = File(reactApplicationContext.cacheDir, subFolderName)
@@ -52,11 +66,7 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
         return
       }
 
-      // Create a sub-folder before generate image.
-      val subFolder = File(reactApplicationContext.cacheDir, subFolderName)
-      if (!subFolder.exists()) {
-          subFolder.mkdirs()
-      }
+      createFolderBeforeGenerate();
 
       pdfDocument = pdfiumCore.newDocument(parcelFileDescriptor)
       val pageCount = pdfiumCore.getPageCount(pdfDocument);
@@ -110,6 +120,7 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
         return
       }
 
+      createFolderBeforeGenerate();
       pdfDocument = pdfiumCore.newDocument(parcelFileDescriptor)
       val pageCount = pdfiumCore.getPageCount(pdfDocument);
 
