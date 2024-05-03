@@ -16,6 +16,8 @@ type NativeType = {
     filePath: string,
     quality: number
   ): Promise<ThumbnailResult[]>;
+  getTotalPage(filePath: string): Promise<number>;
+  deleteGeneratedFolder(): boolean;
 };
 
 const LINKING_ERROR =
@@ -65,5 +67,13 @@ export default class PdfThumbnail {
       filePath,
       sanitizeQuality(quality)
     );
+  }
+
+  static async getTotalPage(filePath: string): Promise<number> {
+    return PdfThumbnailNativeModule.getTotalPage(filePath);
+  }
+
+  static deleteGeneratedFolder(): boolean {
+    return PdfThumbnailNativeModule.deleteGeneratedFolder();
   }
 }
