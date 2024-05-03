@@ -2,6 +2,7 @@ import PDFKit
 
 @objc(PdfThumbnail)
 class PdfThumbnail: NSObject {
+    var subFolderName = "imagesSign";
 
     @objc
     static func requiresMainQueueSetup() -> Bool {
@@ -26,22 +27,19 @@ class PdfThumbnail: NSObject {
     }
 
     func getImagesSignFolder() -> URL {
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0];
-        let folderName = "imagesSign";
-        let folderURL = documentsDirectory.appendingPathComponent(folderName)
+        let subFolderURL = getCachesDirectory().appendingPathComponent(subFolderName);        
         
-        return folderURL;
+        return subFolderURL;
     }
 
+     @objc(deleteGeneratedFolder)
     func deleteGeneratedFolder() -> Bool {
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0];
-        let folderName = "imagesSign";
-        let folderURL = documentsDirectory.appendingPathComponent(folderName)
+        let folder = getImagesSignFolder();
         
         // Remove folder if it already exists
-        if FileManager.default.fileExists(atPath: folderURL.path) {
+        if FileManager.default.fileExists(atPath: folder.path) {
             do {
-                try FileManager.default.removeItem(at: folderURL)
+                try FileManager.default.removeItem(at: folder)
                 return true;
             } catch {
                 print("Error removing existing folder: \(error)")
@@ -63,23 +61,11 @@ class PdfThumbnail: NSObject {
             return
         }
         
-        // Remove the folder if it already exists
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0];
-        let folderName = "imagesSign";
-        let folderURL = documentsDirectory.appendingPathComponent(folderName)
-    
-        //   if FileManager.default.fileExists(atPath: folderURL.path) {
-        //       do {
-        //           try FileManager.default.removeItem(at: folderURL)
-        //       } catch {
-        //           print("Error removing existing folder: \(error)")
-        //       }
-        //   }
-
         // Create a custom folder if it doesn't exist
-        if !FileManager.default.fileExists(atPath: folderURL.path) {
+        let folder = getImagesSignFolder();
+        if !FileManager.default.fileExists(atPath: folder.path) {
             do {
-                try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: nil)
             } catch {
                 print("Error creating custom folder: \(error)")
                 reject("ERROR_CREATING_FOLDER", "\(error)", nil)

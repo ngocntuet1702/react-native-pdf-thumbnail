@@ -25,11 +25,50 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
   val pdfiumCore = PdfiumCore(reactContext)
+  val subFolderName = "imagesSign"
 
   override fun getName(): String {
     return NAME
   }
 
+  @ReactMethod
+  fun deleteGeneratedFolder(): Boolean {
+    val cacheDir = File(reactApplicationContext.cacheDir, subFolderName)
+    if (cacheDir.exists()) {
+      cacheDir.deleteRecursively();
+      return true;
+    }
+    return true;
+  }
+
+  @ReactMethod
+  fun getTotalPage(filePath: String, promise: Promise) {
+    var parcelFileDescriptor: ParcelFileDescriptor? = null
+    var pdfDocument: PdfDocument? = null;
+    try {
+      parcelFileDescriptor = getParcelFileDescriptor(filePath)
+      if (parcelFileDescriptor == null) {
+        promise.reject("FILE_NOT_FOUND", "File $filePath not found")
+        return
+      }
+
+      // Create a sub-folder before generate image.
+      val subFolder = File(reactApplicationContext.cacheDir, subFolderName)
+      if (!subFolder.exists()) {
+          subFolder.mkdirs()
+      }
+
+      pdfDocument = pdfiumCore.newDocument(parcelFileDescriptor)
+      val pageCount = pdfiumCore.getPageCount(pdfDocument);
+
+      promise.resolve(pageCount);
+    } catch (ex: IOException) {
+      promise.reject("INTERNAL_ERROR", ex)
+    } finally {
+      parcelFileDescriptor?.close()
+    }
+  }
+  
   @ReactMethod
   fun generate(filePath: String, page: Int, quality: Int, promise: Promise) {
     var parcelFileDescriptor: ParcelFileDescriptor? = null
