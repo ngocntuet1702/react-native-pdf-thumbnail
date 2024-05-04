@@ -161,7 +161,8 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
     val bitmapWhiteBG = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
     pdfiumCore.renderPageBitmap(pdfDocument, bitmapWhiteBG, page, 0, 0, width, height, true)
 
-    val outputFile = File.createTempFile(getOutputFilePrefix(filePath, page), ".png", reactApplicationContext.cacheDir)
+    val subFolder = File(reactApplicationContext.cacheDir, subFolderName)
+    val outputFile = File.createTempFile(getOutputFilePrefix(filePath, page), ".png", subFolder)
     if (outputFile.exists()) {
       outputFile.delete()
     }
