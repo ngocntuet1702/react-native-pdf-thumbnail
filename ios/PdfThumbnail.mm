@@ -10,12 +10,6 @@ RCT_EXTERN_METHOD(generateAllPages:(NSString *)filePath withQuality:(int)quality
                   withResolver:(RCTPromiseResolveBlock)resolve
                   withRejecter:(RCTPromiseRejectBlock)reject)
 
-RCT_EXTERN_METHOD(getTotalPage:(NSString *) filePath
-                  withResolver:(RCTPromiseResolveBlock)resolve
-                  withRejecter:(RCTPromiseRejectBlock)reject)
-
-RCT_EXTERN_METHOD(deleteGeneratedFolder)
-
 + (BOOL)requiresMainQueueSetup
 {
   return NO;

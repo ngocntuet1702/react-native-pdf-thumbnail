@@ -2,7 +2,6 @@ import PDFKit
 
 @objc(PdfThumbnail)
 class PdfThumbnail: NSObject {
-    var subFolderName = "imagesSign";
 
     @objc
     static func requiresMainQueueSetup() -> Bool {
@@ -26,74 +25,12 @@ class PdfThumbnail: NSObject {
         return "\(prefix)-thumbnail-\(page)-\(random).jpg"
     }
 
-    func getImagesSignFolder() -> URL {
-        let subFolderURL = getCachesDirectory().appendingPathComponent(subFolderName);        
-        
-        return subFolderURL;
-    }
-
-     func createFolderBeforeGenerate() -> Void {
-        let folder = getImagesSignFolder();
-
-        // Remove folder if it already exists
-        if FileManager.default.fileExists(atPath: folder.path) {
-            do {
-                try FileManager.default.removeItem(at: folder)
-            } catch {
-                print("Error removing existing folder: \(error)")
-            }
-        }
-        
-        // Create a custom folder if it doesn't exist
-        if !FileManager.default.fileExists(atPath: folder.path) {
-            do {
-                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                print("Error creating custom folder: \(error)")
-            }
-        }
-    }
-
-    @objc(deleteGeneratedFolder)
-    func deleteGeneratedFolder() -> Bool {
-        let folder = getImagesSignFolder();
-        
-        // Remove folder if it already exists
-        if FileManager.default.fileExists(atPath: folder.path) {
-            do {
-                try FileManager.default.removeItem(at: folder)
-                return true;
-            } catch {
-                print("Error removing existing folder: \(error)")
-                return false;
-            }
-        }
-        
-        return false;
-    }
-
-    @objc(getTotalPage:withResolver:withRejecter:)
-    func getTotalPage(filePath: String, resolve:RCTPromiseResolveBlock, reject:RCTPromiseRejectBlock) -> Void {
-        guard let fileUrl = URL(string: filePath) else {
-            reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
-            return
-        }
-        guard let pdfDocument = PDFDocument(url: fileUrl) else {
-            reject("FILE_NOT_FOUND", "File \(filePath) not found", nil)
-            return
-        }
-
-        createFolderBeforeGenerate();
-
-        resolve(pdfDocument.pageCount)
-    }
-
     func generatePage(pdfPage: PDFPage, filePath: String, page: Int, quality: Int) -> Dictionary<String, Any>? {
-         autoreleasepool {
+        autoreleasepool {
             let pageRect = pdfPage.bounds(for: .mediaBox)
             let imageSize = CGSize(width: pageRect.width * 2, height: pageRect.height * 2)
             let image = pdfPage.thumbnail(of: imageSize, for: .mediaBox)
-            let outputFile = getImagesSignFolder().appendingPathComponent(getOutputFilename(filePath: filePath, page: page))
+            let outputFile = getCachesDirectory().appendingPathComponent(getOutputFilename(filePath: filePath, page: page))
             guard let data = image.jpegData(compressionQuality: CGFloat(quality) / 100) else {
                 return nil
             }
@@ -169,9 +106,6 @@ class PdfThumbnail: NSObject {
         }
 
         autoreleasepool {
-            
-            createFolderBeforeGenerate();
-            
             var result: [Dictionary<String, Any>] = []
             for page in 0..<pdfDocument.pageCount {
                 autoreleasepool {

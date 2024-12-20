@@ -25,60 +25,10 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
   val pdfiumCore = PdfiumCore(reactContext)
-  val subFolderName = "imagesSign"
 
   override fun getName(): String {
     return NAME
   }
-
-  fun createFolderBeforeGenerate() {
-    val subFolder = File(reactApplicationContext.cacheDir, subFolderName)
-
-    // Remove folder if it already exists
-    if (subFolder.exists()) {
-      subFolder.deleteRecursively();
-    }
-
-    // Create a sub-folder before generate image.
-    if (!subFolder.exists()) {
-      subFolder.mkdirs()
-    }
-  }
-
-  @ReactMethod
-  fun deleteGeneratedFolder(): Boolean {
-    val cacheDir = File(reactApplicationContext.cacheDir, subFolderName)
-    if (cacheDir.exists()) {
-      cacheDir.deleteRecursively();
-      return true;
-    }
-    return true;
-  }
-
-  @ReactMethod
-  fun getTotalPage(filePath: String, promise: Promise) {
-    var parcelFileDescriptor: ParcelFileDescriptor? = null
-    var pdfDocument: PdfDocument? = null;
-    try {
-      parcelFileDescriptor = getParcelFileDescriptor(filePath)
-      if (parcelFileDescriptor == null) {
-        promise.reject("FILE_NOT_FOUND", "File $filePath not found")
-        return
-      }
-
-      createFolderBeforeGenerate();
-
-      pdfDocument = pdfiumCore.newDocument(parcelFileDescriptor)
-      val pageCount = pdfiumCore.getPageCount(pdfDocument);
-
-      promise.resolve(pageCount);
-    } catch (ex: IOException) {
-      promise.reject("INTERNAL_ERROR", ex)
-    } finally {
-      parcelFileDescriptor?.close()
-    }
-  }
-  
   @ReactMethod
   fun generate(filePath: String, page: Int, quality: Int, promise: Promise) {
     var parcelFileDescriptor: ParcelFileDescriptor? = null
@@ -120,7 +70,6 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
         return
       }
 
-      createFolderBeforeGenerate();
       pdfDocument = pdfiumCore.newDocument(parcelFileDescriptor)
       val pageCount = pdfiumCore.getPageCount(pdfDocument);
 
@@ -161,8 +110,7 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
     val bitmapWhiteBG = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
     pdfiumCore.renderPageBitmap(pdfDocument, bitmapWhiteBG, page, 0, 0, width, height, true)
 
-    val subFolder = File(reactApplicationContext.cacheDir, subFolderName)
-    val outputFile = File.createTempFile(getOutputFilePrefix(filePath, page), ".png", subFolder)
+    val outputFile = File.createTempFile(getOutputFilePrefix(filePath, page), ".png", reactApplicationContext.cacheDir)
     if (outputFile.exists()) {
       outputFile.delete()
     }
