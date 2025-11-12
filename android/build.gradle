@@ -91,6 +91,7 @@ dependencies {
   implementation "com.facebook.react:react-native:+"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
   // implementation 'com.github.barteksc:pdfium-android:1.9.0'
-  implementation 'com.github.mhiew:pdfium-android:1.9.2'
+  // implementation 'com.github.mhiew:pdfium-android:1.9.2'
+  implementation 'com.github.marain87:PdfiumAndroid:1.9.8'
 }
 
