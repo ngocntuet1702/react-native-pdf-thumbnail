@@ -1,4 +1,5 @@
 import PDFKit
+import QuickLookThumbnailing
 
 @objc(PdfThumbnail)
 class PdfThumbnail: NSObject {
@@ -28,10 +29,43 @@ class PdfThumbnail: NSObject {
     func generatePage(pdfPage: PDFPage, filePath: String, page: Int, quality: Int) -> Dictionary<String, Any>? {
         autoreleasepool {
             let pageRect = pdfPage.bounds(for: .mediaBox)
-            let imageSize = CGSize(width: pageRect.width * 2, height: pageRect.height * 2)
-            let image = pdfPage.thumbnail(of: imageSize, for: .mediaBox)
+            let scale: CGFloat = 2.0
+            let imageSize = CGSize(width: pageRect.width * scale, height: pageRect.height * scale)
+
+            // On iOS 26 every PDFKit rendering API
+            // (thumbnail/draw/PDFView.layer.render) lost the ability to
+            // composite signature widget annotations. Bypass PDFKit and use
+            // QLThumbnailGenerator, which runs the system QuickLook PDF
+            // renderer (same one as Files.app) and respects signed widgets.
+            // QL only thumbnails the first page of a PDF, so we extract the
+            // requested page into a single-page temp PDF first.
+            guard let pageCopy = pdfPage.copy() as? PDFPage else { return nil }
+            let singleDoc = PDFDocument()
+            singleDoc.insert(pageCopy, at: 0)
+            let tempUrl = FileManager.default.temporaryDirectory
+                .appendingPathComponent("pdf-thumb-\(UUID().uuidString).pdf")
+            guard singleDoc.write(to: tempUrl) else { return nil }
+            defer { try? FileManager.default.removeItem(at: tempUrl) }
+
+            let request = QLThumbnailGenerator.Request(
+                fileAt: tempUrl,
+                size: imageSize,
+                scale: 1.0,
+                representationTypes: .thumbnail
+            )
+            request.iconMode = false
+
+            var resultImage: UIImage?
+            let semaphore = DispatchSemaphore(value: 0)
+            QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { rep, _ in
+                resultImage = rep?.uiImage
+                semaphore.signal()
+            }
+            _ = semaphore.wait(timeout: .now() + 10.0)
+
             let outputFile = getCachesDirectory().appendingPathComponent(getOutputFilename(filePath: filePath, page: page))
-            guard let data = image.jpegData(compressionQuality: CGFloat(quality) / 100) else {
+            guard let finalImage = resultImage,
+                  let data = finalImage.jpegData(compressionQuality: CGFloat(quality) / 100) else {
                 return nil
             }
 
