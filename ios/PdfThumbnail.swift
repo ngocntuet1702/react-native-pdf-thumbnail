@@ -26,9 +26,50 @@ class PdfThumbnail: NSObject {
         return "\(prefix)-thumbnail-\(page)-\(random).jpg"
     }
 
-    // Async core. Extraction (PDF copy + temp write) runs synchronously on the
-    // calling thread so callers serialize PDFKit access; the QL thumbnail step
-    // and the JPEG write happen in QL's completion handler.
+    // Writes the rendered page image as JPEG into the caches dir and returns
+    // the JS result dict (logical/unscaled page dimensions, swapped on 90°
+    // rotation). Returns nil if JPEG encoding fails, or {"error": ...} on a
+    // write failure.
+    private func buildResult(
+        image: UIImage,
+        filePath: String,
+        page: Int,
+        quality: Int,
+        pageRect: CGRect,
+        rotation: Int
+    ) -> [String: Any]? {
+        guard let data = image.jpegData(compressionQuality: CGFloat(quality) / 100) else {
+            return nil
+        }
+        let outputFile = getCachesDirectory().appendingPathComponent(
+            getOutputFilename(filePath: filePath, page: page))
+
+        let width: Int
+        let height: Int
+        if rotation % 180 == 90 {
+            width = Int(pageRect.height)
+            height = Int(pageRect.width)
+        } else {
+            width = Int(pageRect.width)
+            height = Int(pageRect.height)
+        }
+
+        do {
+            try data.write(to: outputFile)
+            return ["uri": outputFile.absoluteString, "width": width, "height": height]
+        } catch {
+            return ["error": error]
+        }
+    }
+
+    // Async core. Picks the renderer by OS version:
+    //  - iOS < 26: PDFKit renders in-process and works reliably on real
+    //    devices. QLThumbnailGenerator runs out-of-process and fails on device
+    //    with "QLThumbnailErrorDomain error 0" for normal PDFs (it only happens
+    //    to work on the Simulator, which borrows the Mac's QuickLook renderer).
+    //  - iOS 26+: PDFKit's rendering APIs (thumbnail/draw/PDFView.layer.render)
+    //    stopped compositing signature widget annotations, so we fall back to
+    //    QLThumbnailGenerator there.
     private func generatePageAsync(
         pdfPage: PDFPage,
         filePath: String,
@@ -42,13 +83,43 @@ class PdfThumbnail: NSObject {
             let imageSize = CGSize(width: pageRect.width * scale, height: pageRect.height * scale)
             let rotation = pdfPage.rotation
 
-            // On iOS 26 every PDFKit rendering API
-            // (thumbnail/draw/PDFView.layer.render) lost the ability to
-            // composite signature widget annotations. Bypass PDFKit and use
-            // QLThumbnailGenerator, which runs the system QuickLook PDF
-            // renderer (same one as Files.app) and respects signed widgets.
-            // QL only thumbnails the first page of a PDF, so we extract the
-            // requested page into a single-page temp PDF first.
+            if #available(iOS 26.0, *) {
+                generateWithQuickLook(
+                    pdfPage: pdfPage,
+                    filePath: filePath,
+                    page: page,
+                    quality: quality,
+                    pageRect: pageRect,
+                    imageSize: imageSize,
+                    rotation: rotation,
+                    completion: completion)
+            } else {
+                let image = pdfPage.thumbnail(of: imageSize, for: .mediaBox)
+                let result = buildResult(
+                    image: image,
+                    filePath: filePath,
+                    page: page,
+                    quality: quality,
+                    pageRect: pageRect,
+                    rotation: rotation)
+                completion(result)
+            }
+        }
+    }
+
+    // iOS 26+ QuickLook path. QL only thumbnails the first page of a PDF, so we
+    // extract the requested page into a single-page temp PDF first.
+    @available(iOS 26.0, *)
+    private func generateWithQuickLook(
+        pdfPage: PDFPage,
+        filePath: String,
+        page: Int,
+        quality: Int,
+        pageRect: CGRect,
+        imageSize: CGSize,
+        rotation: Int,
+        completion: @escaping ([String: Any]?) -> Void
+    ) {
             guard let pageCopy = pdfPage.copy() as? PDFPage else {
                 completion(nil)
                 return
@@ -74,37 +145,19 @@ class PdfThumbnail: NSObject {
                 autoreleasepool {
                     try? FileManager.default.removeItem(at: tempUrl)
 
-                    guard let self = self,
-                          let image = rep?.uiImage,
-                          let data = image.jpegData(compressionQuality: CGFloat(quality) / 100) else {
-                        completion(nil)
-                        return
-                    }
-
-                    let outputFile = self.getCachesDirectory().appendingPathComponent(
-                        self.getOutputFilename(filePath: filePath, page: page))
-
-                    let width: Int
-                    let height: Int
-                    if rotation % 180 == 90 {
-                        width = Int(pageRect.height)
-                        height = Int(pageRect.width)
-                    } else {
-                        width = Int(pageRect.width)
-                        height = Int(pageRect.height)
-                    }
-
-                    do {
-                        try data.write(to: outputFile)
-                        completion([
-                            "uri": outputFile.absoluteString,
-                            "width": width,
-                            "height": height,
-                        ])
-                    } catch {
-                        completion(["error": error])
-                    }
+                guard let self = self, let image = rep?.uiImage else {
+                    completion(nil)
+                    return
                 }
+
+                let result = self.buildResult(
+                    image: image,
+                    filePath: filePath,
+                    page: page,
+                    quality: quality,
+                    pageRect: pageRect,
+                    rotation: rotation)
+                completion(result)
             }
         }
     }
